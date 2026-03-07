@@ -1,0 +1,896 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qualia Editor</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@300;400&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap');
+
+  :root {
+    --bg: #0e0e10;
+    --surface: #16161a;
+    --surface2: #1e1e24;
+    --border: #2a2a35;
+    --accent: #c9a84c;
+    --accent-dim: rgba(201,168,76,0.15);
+    --accent-glow: rgba(201,168,76,0.35);
+    --text: #e8e4d9;
+    --text-dim: #7a7870;
+    --text-mid: #b0ac9f;
+    --highlight-pending: rgba(201,168,76,0.25);
+    --highlight-resolved: rgba(80,180,120,0.15);
+    --highlight-border: rgba(201,168,76,0.7);
+    --resolved-border: rgba(80,180,120,0.6);
+    --comment-bg: #1a1a20;
+    --comment-border: #2e2e3a;
+    --green: #50b478;
+    --red: #c96b6b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Crimson Pro', Georgia, serif;
+    font-size: 17px;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* HEADER */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    height: 52px;
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+    flex-shrink: 0;
+  }
+
+  .logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 18px;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+  }
+
+  .logo span {
+    color: var(--text-dim);
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    margin-left: 10px;
+    letter-spacing: 0.1em;
+  }
+
+  .toolbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text-mid);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    padding: 5px 10px;
+    border-radius: 3px;
+    cursor: pointer;
+    outline: none;
+  }
+
+  select:focus { border-color: var(--accent); }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: transparent;
+    color: var(--text-mid);
+  }
+
+  .btn:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-primary {
+    background: var(--accent);
+    color: #0e0e10;
+    border-color: var(--accent);
+    font-weight: 400;
+  }
+
+  .btn-primary:hover {
+    background: #e0bb60;
+    color: #0e0e10;
+    border-color: #e0bb60;
+  }
+
+  .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  /* MAIN LAYOUT */
+  .workspace {
+    display: grid;
+    grid-template-columns: 1fr 380px;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* LEFT — TEXT EDITOR */
+  .editor-pane {
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+    overflow: hidden;
+  }
+
+  .pane-header {
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: var(--surface);
+  }
+
+  .wordcount { color: var(--text-dim); }
+
+  #editor-display {
+    flex: 1;
+    overflow-y: auto;
+    padding: 36px 48px;
+    line-height: 1.85;
+    font-size: 17px;
+    color: var(--text);
+    cursor: text;
+    outline: none;
+  }
+
+  #editor-display:empty::before {
+    content: "Begin writing, or paste your manuscript here…";
+    color: var(--text-dim);
+    font-style: italic;
+    pointer-events: none;
+  }
+
+  /* highlights */
+  .hl {
+    background: var(--highlight-pending);
+    border-bottom: 2px solid var(--highlight-border);
+    cursor: pointer;
+    transition: background 0.2s;
+    border-radius: 2px;
+  }
+
+  .hl:hover { background: rgba(201,168,76,0.4); }
+
+  .hl.resolved {
+    background: var(--highlight-resolved);
+    border-bottom: 2px solid var(--resolved-border);
+  }
+
+  .hl.active {
+    background: rgba(201,168,76,0.45);
+    outline: 1px solid var(--accent);
+  }
+
+  /* RIGHT — EDITORIAL PANEL */
+  .editorial-pane {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--surface);
+  }
+
+  .editorial-controls {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+
+  .control-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+
+  .control-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    width: 56px;
+    flex-shrink: 0;
+  }
+
+  select.full { flex: 1; }
+
+  textarea.notes {
+    width: 100%;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Crimson Pro', serif;
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: 3px;
+    resize: none;
+    height: 64px;
+    outline: none;
+    line-height: 1.5;
+  }
+
+  textarea.notes::placeholder { color: var(--text-dim); font-style: italic; }
+  textarea.notes:focus { border-color: var(--accent); }
+
+  .analyse-row {
+    display: flex;
+    gap: 8px;
+  }
+
+  /* COMMENTS LIST */
+  .comments-area {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .no-comments {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: var(--text-dim);
+    font-style: italic;
+    font-size: 15px;
+    text-align: center;
+    padding: 20px;
+  }
+
+  .comment-card {
+    background: var(--comment-bg);
+    border: 1px solid var(--comment-border);
+    border-radius: 4px;
+    overflow: hidden;
+    transition: border-color 0.2s;
+    cursor: pointer;
+  }
+
+  .comment-card:hover { border-color: #3a3a48; }
+  .comment-card.active { border-color: var(--accent); }
+  .comment-card.resolved { border-color: var(--resolved-border); opacity: 0.7; }
+
+  .comment-header {
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid var(--comment-border);
+    background: rgba(255,255,255,0.02);
+  }
+
+  .comment-quote {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--accent);
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .comment-status {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 10px;
+    border: 1px solid;
+  }
+
+  .status-pending { color: var(--accent); border-color: var(--accent); }
+  .status-resolved { color: var(--green); border-color: var(--green); }
+
+  .comment-body {
+    padding: 10px 12px;
+    font-size: 14px;
+    line-height: 1.6;
+    color: var(--text-mid);
+  }
+
+  .comment-thread {
+    padding: 0 12px 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .thread-msg {
+    padding: 7px 10px;
+    border-radius: 3px;
+    font-size: 13px;
+    line-height: 1.5;
+  }
+
+  .thread-msg.user-msg {
+    background: rgba(201,168,76,0.08);
+    border-left: 2px solid var(--accent);
+    color: var(--text);
+  }
+
+  .thread-msg.ai-msg {
+    background: rgba(80,180,120,0.06);
+    border-left: 2px solid var(--green);
+    color: var(--text-mid);
+  }
+
+  .thread-author {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    margin-bottom: 3px;
+    opacity: 0.6;
+    letter-spacing: 0.05em;
+  }
+
+  .comment-reply {
+    padding: 0 12px 10px;
+    display: flex;
+    gap: 6px;
+  }
+
+  .comment-reply input {
+    flex: 1;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'Crimson Pro', serif;
+    font-size: 13px;
+    padding: 5px 9px;
+    border-radius: 3px;
+    outline: none;
+  }
+
+  .comment-reply input:focus { border-color: var(--accent); }
+  .comment-reply input::placeholder { color: var(--text-dim); font-style: italic; }
+
+  .btn-small {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    padding: 5px 10px;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    cursor: pointer;
+    background: transparent;
+    color: var(--text-dim);
+    white-space: nowrap;
+    transition: all 0.15s;
+  }
+
+  .btn-small:hover { border-color: var(--accent); color: var(--accent); }
+
+  .btn-resolve {
+    border-color: var(--green);
+    color: var(--green);
+    font-size: 10px;
+    padding: 3px 8px;
+    background: transparent;
+    border-radius: 3px;
+    cursor: pointer;
+    font-family: 'JetBrains Mono', monospace;
+    transition: all 0.15s;
+    margin: 0 12px 8px;
+    display: block;
+    width: calc(100% - 24px);
+    text-align: center;
+  }
+
+  .btn-resolve:hover { background: rgba(80,180,120,0.1); }
+
+  /* LOADING */
+  .loading-bar {
+    height: 2px;
+    background: var(--accent);
+    width: 0%;
+    transition: width 0.3s;
+    position: absolute;
+    top: 0; left: 0;
+  }
+
+  /* STATUS BAR */
+  .statusbar {
+    height: 26px;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    gap: 20px;
+    flex-shrink: 0;
+  }
+
+  .status-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--text-dim);
+    letter-spacing: 0.06em;
+  }
+
+  .status-item span { color: var(--text-mid); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: #3a3a48; }
+
+  /* spinner */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner {
+    width: 12px; height: 12px;
+    border: 1px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .spinner.active { display: inline-block; }
+
+  .provider-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: var(--accent);
+    border: 1px solid var(--accent-dim);
+    padding: 2px 8px;
+    border-radius: 10px;
+    letter-spacing: 0.06em;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    Qualia Editor
+    <span>v0.1 — prototype</span>
+  </div>
+  <div class="toolbar">
+    <div class="provider-badge">✦ Claude</div>
+    <div class="spinner" id="spinner"></div>
+    <button class="btn" onclick="clearAll()">New</button>
+    <button class="btn" onclick="loadSample()">Load sample</button>
+  </div>
+</header>
+
+<div class="workspace">
+
+  <!-- LEFT: TEXT EDITOR -->
+  <div class="editor-pane">
+    <div class="pane-header">
+      <span>MANUSCRIPT</span>
+      <span class="wordcount" id="wordcount">0 words</span>
+    </div>
+    <div id="editor-display" contenteditable="true" spellcheck="true"
+         oninput="onEditorInput()"
+         onmouseup="onTextSelect()"
+         onkeyup="onTextSelect()">
+    </div>
+  </div>
+
+  <!-- RIGHT: EDITORIAL PANEL -->
+  <div class="editorial-pane">
+    <div class="pane-header">
+      <span>EDITORIAL</span>
+      <span id="comment-count">0 notes</span>
+    </div>
+
+    <div class="editorial-controls">
+      <div class="control-row">
+        <span class="control-label">TYPE</span>
+        <select class="full" id="work-type">
+          <option value="novel">Novel</option>
+          <option value="short_story">Short story</option>
+          <option value="game_dialogue">Game dialogue</option>
+          <option value="screenplay">Screenplay</option>
+          <option value="poetry">Poetry</option>
+          <option value="technical">Technical writing</option>
+        </select>
+      </div>
+      <div class="control-row">
+        <span class="control-label">MODEL</span>
+        <select class="full" id="ai-model">
+          <option value="claude">✦ Claude (editorial)</option>
+          <option value="grok">⚡ Grok (punchy/direct)</option>
+          <option value="gemini">◈ Gemini (localisation)</option>
+          <option value="mistral">⬡ Mistral (local/offline)</option>
+        </select>
+      </div>
+      <textarea class="notes" id="editor-notes"
+        placeholder="Notes to editor — intent, deliberate choices, context the AI should know…"></textarea>
+      <div class="analyse-row">
+        <button class="btn btn-primary" id="analyse-btn" onclick="analyseText()">
+          Analyse manuscript
+        </button>
+        <button class="btn" onclick="analyseSelection()" id="selection-btn" disabled>
+          Analyse selection
+        </button>
+      </div>
+    </div>
+
+    <div class="comments-area" id="comments-area">
+      <div class="no-comments" id="no-comments">
+        Editorial notes will appear here.<br>
+        <span style="font-size:13px; margin-top:6px; display:block;">
+          Write or paste text, then click Analyse.
+        </span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="statusbar">
+  <div class="status-item">WORDS <span id="sb-words">0</span></div>
+  <div class="status-item">NOTES <span id="sb-notes">0</span></div>
+  <div class="status-item">RESOLVED <span id="sb-resolved">0</span></div>
+  <div class="status-item" id="sb-status">Ready</div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let comments = [];
+let commentIdCounter = 0;
+let activeCommentId = null;
+let hasSelection = false;
+
+// ─── EDITOR HELPERS ──────────────────────────────────────────────────────────
+function getEditorText() {
+  return document.getElementById('editor-display').innerText || '';
+}
+
+function onEditorInput() {
+  const text = getEditorText();
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  document.getElementById('wordcount').textContent = words + ' words';
+  document.getElementById('sb-words').textContent = words;
+}
+
+function onTextSelect() {
+  const sel = window.getSelection();
+  const hasText = sel && sel.toString().trim().length > 3;
+  hasSelection = hasText;
+  document.getElementById('selection-btn').disabled = !hasText;
+}
+
+function clearAll() {
+  if (confirm('Clear manuscript and all notes?')) {
+    document.getElementById('editor-display').innerHTML = '';
+    comments = [];
+    commentIdCounter = 0;
+    renderComments();
+    onEditorInput();
+    setStatus('Ready');
+  }
+}
+
+function loadSample() {
+  document.getElementById('editor-display').innerText =
+`The diner was quiet at that hour. Frank wiped the counter with the slow certainty of a man who had nowhere else to be and no particular reason to hurry. The morning light came through the blinds in stripes.
+
+"You're not from around here," the agent said. He hadn't ordered anything. His tie was too tight.
+
+Frank set down the cloth. "Son of a bitch, he said," Frank replied, not looking up. "That's what Billy Ramirez told me when I beat him in the county spelling bee in 1963. I was eight years old."
+
+The agent blinked. Frank smiled very slowly.
+
+Outside, the desert was doing what deserts do. Esmeralda came through the kitchen door with a pot of coffee and the expression of someone who had seen this particular play before and knew how it ended.`;
+  onEditorInput();
+  setStatus('Sample loaded');
+}
+
+// ─── WORD FREQUENCY ──────────────────────────────────────────────────────────
+function getWordFrequency(text) {
+  const words = text.toLowerCase().replace(/[^a-z\s]/g, '').split(/\s+/).filter(Boolean);
+  const freq = {};
+  const stopwords = new Set(['the','a','an','and','or','but','in','on','at','to','for',
+    'of','with','by','from','is','was','were','are','be','been','being','have','has',
+    'had','do','did','does','will','would','could','should','may','might','shall',
+    'that','this','these','those','it','its','he','she','they','we','i','you','his',
+    'her','their','our','my','your','him','them','us','me','who','what','which','as',
+    'so','if','then','than','when','where','how','all','not','no','up','out','said',
+    'very','just','about','into','through','after','before','over','down','off']);
+  words.forEach(w => {
+    if (!stopwords.has(w) && w.length > 2) freq[w] = (freq[w] || 0) + 1;
+  });
+  return Object.entries(freq)
+    .filter(([,c]) => c > 1)
+    .sort((a,b) => b[1]-a[1])
+    .slice(0,15)
+    .map(([w,c]) => `${w}(${c})`)
+    .join(', ');
+}
+
+// ─── AI CALL ─────────────────────────────────────────────────────────────────
+async function callClaude(systemPrompt, userMessage) {
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1000,
+      system: systemPrompt,
+      messages: [{ role: 'user', content: userMessage }]
+    })
+  });
+  const data = await res.json();
+  return data.content.map(b => b.text || '').join('');
+}
+
+function buildSystemPrompt() {
+  const type = document.getElementById('work-type').value;
+  const model = document.getElementById('ai-model').value;
+
+  const typeGuides = {
+    novel: 'literary fiction novel — attend to pacing, character voice, repetition, sentence rhythm, and thematic consistency',
+    short_story: 'short story — economy of language is paramount; flag anything that doesn\'t earn its place',
+    game_dialogue: 'game dialogue — lines must be speakable, distinct per character, and work without facial expression',
+    screenplay: 'screenplay — visual language, subtext, scene economy',
+    poetry: 'poetry — sound, rhythm, image, line breaks; be very conservative with suggestions',
+    technical: 'technical writing — clarity, precision, consistency of terminology'
+  };
+
+  const modelPersonas = {
+    claude: 'You are a thoughtful literary editor — precise, warm, honest. You catch inconsistencies and flag genuine problems without over-editing.',
+    grok: 'You are a direct, no-nonsense editor. Short sentences. Say what\'s wrong. No padding.',
+    gemini: 'You are a localization-aware editor. Flag idioms, cultural references, and anything that won\'t translate cleanly.',
+    mistral: 'You are a careful European literary editor. Balanced, precise, culturally aware.'
+  };
+
+  return `${modelPersonas[model]}
+
+This is a ${typeGuides[type]}.
+
+Return a JSON array of editorial comments. Each comment:
+{
+  "quote": "exact short phrase from text (5-10 words max)",
+  "note": "your editorial observation (2-3 sentences max)",
+  "severity": "suggestion|concern|praise"
+}
+
+Return ONLY valid JSON array, no other text. 3-6 comments maximum. Be selective — only flag things that genuinely matter.`;
+}
+
+function buildReplySystemPrompt() {
+  return `You are a literary editor responding to a writer's explanation of their deliberate choices.
+The writer has explained their intent for a flagged passage.
+Respond in 1-2 sentences: acknowledge their reasoning, say whether the flag should be resolved or if there's still a concern.
+Be collegial and direct. No padding.`;
+}
+
+// ─── ANALYSE ─────────────────────────────────────────────────────────────────
+async function analyseText() {
+  const text = getEditorText().trim();
+  if (!text) { setStatus('Nothing to analyse'); return; }
+
+  setLoading(true);
+  setStatus('Analysing…');
+
+  const freq = getWordFrequency(text);
+  const notes = document.getElementById('editor-notes').value;
+
+  const userMsg = `${notes ? `Writer's notes: ${notes}\n\n` : ''}${freq ? `Repeated words: ${freq}\n\n` : ''}MANUSCRIPT:\n${text}`;
+
+  try {
+    const raw = await callClaude(buildSystemPrompt(), userMsg);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const items = JSON.parse(clean);
+    items.forEach(item => addComment(item.quote, item.note, item.severity));
+    setStatus(`Analysis complete — ${items.length} notes`);
+  } catch(e) {
+    setStatus('Analysis failed — check console');
+    console.error(e);
+  }
+
+  setLoading(false);
+  applyHighlights();
+}
+
+async function analyseSelection() {
+  const sel = window.getSelection();
+  if (!sel || !sel.toString().trim()) return;
+  const selectedText = sel.toString().trim();
+
+  setLoading(true);
+  setStatus('Analysing selection…');
+
+  const notes = document.getElementById('editor-notes').value;
+  const userMsg = `${notes ? `Writer's notes: ${notes}\n\n` : ''}SELECTED PASSAGE:\n${selectedText}`;
+
+  try {
+    const raw = await callClaude(buildSystemPrompt(), userMsg);
+    const clean = raw.replace(/```json|```/g, '').trim();
+    const items = JSON.parse(clean);
+    items.forEach(item => addComment(item.quote || selectedText.slice(0,40), item.note, item.severity));
+    setStatus(`Selection analysed — ${items.length} notes`);
+  } catch(e) {
+    setStatus('Failed — check console');
+    console.error(e);
+  }
+
+  setLoading(false);
+  applyHighlights();
+}
+
+// ─── COMMENTS ────────────────────────────────────────────────────────────────
+function addComment(quote, note, severity = 'suggestion') {
+  const id = ++commentIdCounter;
+  comments.push({ id, quote, note, severity, resolved: false, thread: [] });
+  renderComments();
+  updateCounts();
+}
+
+function renderComments() {
+  const area = document.getElementById('comments-area');
+  const noComments = document.getElementById('no-comments');
+
+  if (comments.length === 0) {
+    area.innerHTML = '';
+    area.appendChild(noComments);
+    noComments.style.display = 'flex';
+    return;
+  }
+
+  noComments.style.display = 'none';
+  area.innerHTML = '';
+
+  comments.forEach(c => {
+    const card = document.createElement('div');
+    card.className = `comment-card${c.resolved ? ' resolved' : ''}${activeCommentId === c.id ? ' active' : ''}`;
+    card.dataset.id = c.id;
+    card.onclick = (e) => { if (!e.target.closest('.comment-reply') && !e.target.closest('.btn-resolve') && !e.target.closest('.btn-small')) activateComment(c.id); };
+
+    const severityColor = { suggestion: '#c9a84c', concern: '#c96b6b', praise: '#50b478' }[c.severity] || '#c9a84c';
+
+    let threadHtml = c.thread.map(msg => `
+      <div class="thread-msg ${msg.role === 'user' ? 'user-msg' : 'ai-msg'}">
+        <div class="thread-author">${msg.role === 'user' ? 'WRITER' : 'EDITOR'}</div>
+        ${msg.text}
+      </div>`).join('');
+
+    card.innerHTML = `
+      <div class="comment-header">
+        <span class="comment-quote" title="${c.quote}">"${c.quote.slice(0,35)}${c.quote.length>35?'…':''}"</span>
+        <span class="comment-status ${c.resolved ? 'status-resolved' : 'status-pending'}">${c.resolved ? '✓ resolved' : c.severity}</span>
+      </div>
+      <div class="comment-body" style="border-left: 2px solid ${severityColor}; padding-left: 10px; margin: 8px 12px;">${c.note}</div>
+      ${c.thread.length ? `<div class="comment-thread">${threadHtml}</div>` : ''}
+      ${!c.resolved ? `
+        <div class="comment-reply">
+          <input type="text" placeholder="Explain your choice…" id="reply-${c.id}"
+            onkeydown="if(event.key==='Enter') sendReply(${c.id})">
+          <button class="btn-small" onclick="sendReply(${c.id})">Send</button>
+        </div>
+        <button class="btn-resolve" onclick="resolveComment(${c.id})">✓ Mark resolved</button>
+      ` : ''}
+    `;
+
+    area.appendChild(card);
+  });
+
+  updateCounts();
+}
+
+function activateComment(id) {
+  activeCommentId = id;
+  renderComments();
+  applyHighlights();
+  // scroll to highlight
+  const hl = document.querySelector(`.hl[data-id="${id}"]`);
+  if (hl) hl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function sendReply(id) {
+  const input = document.getElementById(`reply-${id}`);
+  const replyText = input.value.trim();
+  if (!replyText) return;
+
+  const comment = comments.find(c => c.id === id);
+  if (!comment) return;
+
+  comment.thread.push({ role: 'user', text: replyText });
+  input.value = '';
+  renderComments();
+
+  setLoading(true);
+  setStatus('Editor thinking…');
+
+  const context = `Original flagged passage: "${comment.quote}"\nEditor's note: ${comment.note}\nWriter's explanation: ${replyText}`;
+  try {
+    const reply = await callClaude(buildReplySystemPrompt(), context);
+    comment.thread.push({ role: 'ai', text: reply.trim() });
+  } catch(e) {
+    comment.thread.push({ role: 'ai', text: 'Could not reach the editor. Check your connection.' });
+  }
+
+  setLoading(false);
+  setStatus('Ready');
+  renderComments();
+}
+
+function resolveComment(id) {
+  const c = comments.find(c => c.id === id);
+  if (c) { c.resolved = true; renderComments(); applyHighlights(); updateCounts(); }
+}
+
+// ─── HIGHLIGHTS ───────────────────────────────────────────────────────────────
+function applyHighlights() {
+  const display = document.getElementById('editor-display');
+  let html = display.innerText;
+
+  // escape for HTML
+  html = html
+    .replace(/&/g,'&amp;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;')
+    .replace(/\n/g,'<br>');
+
+  // apply highlights in reverse order to preserve indices
+  const toHighlight = [...comments].reverse();
+  toHighlight.forEach(c => {
+    const q = c.quote.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+    const cls = `hl${c.resolved ? ' resolved' : ''}${activeCommentId === c.id ? ' active' : ''}`;
+    html = html.replace(
+      new RegExp(q, 'i'),
+      `<span class="${cls}" data-id="${c.id}" onclick="activateComment(${c.id})">$&</span>`
+    );
+  });
+
+  display.innerHTML = html;
+}
+
+// ─── UTILS ───────────────────────────────────────────────────────────────────
+function updateCounts() {
+  const total = comments.length;
+  const resolved = comments.filter(c => c.resolved).length;
+  document.getElementById('comment-count').textContent = total + ' notes';
+  document.getElementById('sb-notes').textContent = total;
+  document.getElementById('sb-resolved').textContent = resolved;
+}
+
+function setLoading(on) {
+  document.getElementById('spinner').classList.toggle('active', on);
+  document.getElementById('analyse-btn').disabled = on;
+}
+
+function setStatus(msg) {
+  document.getElementById('sb-status').textContent = msg;
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+onEditorInput();
+</script>
+</body>
+</html>

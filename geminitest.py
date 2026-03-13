@@ -1,6 +1,6 @@
 from google import genai
 
-client = genai.Client(api_key="AIzaSyDLdOn1UmuzaFYBrKSJcTkzxYXxdcoS4Q0")
+client = genai.Client(api_key="AIzaSyBJknF48jExfMlloEZTlMm0ogVJbyJv6zI")
 
 text = "The diner was quiet. Frank wiped the counter slow."
 
@@ -11,7 +11,7 @@ response = client.models.generate_content(
 print(response.text)
 
 genai.configure(api_key=api_key)
-model = genai.GenerativeModel("gemini-1.5-flash-latest")
+model="gemini-1.5-flash"
 
 text = "The diner was quiet. Frank wiped the counter slow."
 
